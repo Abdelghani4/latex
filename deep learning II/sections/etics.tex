@@ -1,0 +1,548 @@
+\section{Optimisation de l'infrastructure de données}
+\subsection{Requêtes MQL}
+Dans la partie suivante du rapport, nous allons procéder à une analyse des cas d'utilisation définis dans la section 1.2. À cette fin, nous allons traduire chaque cas d'utilisation en une requête MQL (MongoDB Query Language).
+\subsubsection{End-user view}
+\begin{enumerate}
+   \item Quelle est la valeur moyenne de chaque indicateur pour une région spécifique (par example l’Afrique)? 
+   
+\lstset{
+  basicstyle=\ttfamily,
+  columns=fullflexible,
+  frame=single,
+  breaklines=true,
+  postbreak=\mbox{\textcolor{red}{$\hookrightarrow$}\space},
+}
+\begin{lstlisting}
+db.indicators.aggregate([
+  {
+    $lookup: {
+      from: "countries",
+      localField: "CountryCode",
+      foreignField: "CountryCode",
+      as: "country"
+    }
+  },
+  {
+    $unwind: "$country"
+  },
+  {
+    $match: {
+      "country.Region": "Africa"
+    }
+  },
+  {
+    $group: {
+      _id: "$IndicatorCode",
+      Moyenne: {
+        $avg: "$Value"
+      }
+    }
+  }
+])
+\end{lstlisting}
+    \item Comment obtenir la valeur du Topic ’Poverty’ pour un intervalle d’années pour un pays donné (ex. Maroc entre 2000 et 2010)  ?
+
+\begin{lstlisting}
+db.indicators.aggregate([
+  {
+    $lookup: {
+      from: "series",
+      localField: "SeriesCode",
+      foreignField: "SeriesCode",
+      as: "series"
+    }
+  },
+  {
+    $unwind: "$series"
+  },
+  {
+    $match: {
+      "series.Topic": "Poverty",
+      "Year": { $gte: 2000, $lte: 2010 },
+      "CountryName": "Maroc"
+    }
+  },
+  {
+    $project: {
+      "_id": 0,
+      "CountryName": 1,
+      "IndicatorName": 1,
+      "Year": 1,
+      "Value": 1,
+      "Topic": "$series.Topic"
+    }
+  }
+]);
+
+\end{lstlisting}
+
+
+    \item Comment obtenir la manière avec laquelle l’accès à l’électricité a changer pour le groupe ’LowIncome’ ?
+\begin{lstlisting}[language=Python]
+db.Indicators.aggregate([
+    {
+        $match: {
+            IndicatorName: "Access to electricity (% of population)",
+            Year: { $gte: 2005, $lte: 2010 }
+        }
+    },
+    {
+        $lookup: {
+            from: "Country",
+            localField: "CountryName",
+            foreignField: "CountryName",
+            as: "country_info"
+        }
+    },
+    {
+        $unwind: "$country_info"
+    },
+    {
+        $match: {
+            "country_info.IncomeGroup": "Low income"
+        }
+    },
+    {
+        $group: {
+            _id: "$Year",
+            average_access: { $avg: "$Value" }
+        }
+    },
+    {
+        $sort: { _id: 1 }
+    }
+])
+\end{lstlisting}
+    \item Quelles sont les pays africains qui possèdent une profondeur de déficit calorique inférieur au
+    minimum the calories dont une personne a besoin ?
+\begin{lstlisting}[language=Python]
+db.Indicators.aggregate([
+  {
+    $lookup: {
+      from: "Country",
+      localField: "CountryName",
+      foreignField: "CountryName",
+      as: "country"
+    }
+  },
+  {
+    $match: {
+      "country.Region": "Africa",
+      IndicatorName: "Depth of the food deficit (kilocalories per person per day)",
+      Value: { $lt: 1800 } // Minimum calories required per person per day
+    }
+  },
+  {
+    $group: {
+      _id: "$CountryName",
+      deficit_avg: { $avg: "$Value" }
+    }
+  },
+  {
+    $sort: {
+      deficit_avg: 1
+    }
+  }
+]);
+
+\end{lstlisting}
+
+\end{enumerate}
+
+\subsubsection{Data Analyst view}
+\lstset{
+  basicstyle=\ttfamily,
+  columns=fullflexible,
+  frame=single,
+  breaklines=true,
+  postbreak=\mbox{\textcolor{red}{$\hookrightarrow$}\space},
+}
+\begin{enumerate}
+    \item Quelle est la valeur du Topic ‘GDP’ pour les ‘high income’ groupes ?\\
+    
+Dans la base de données, le Topic 'GDP' est représenté par 'Economic Policy & Debt: National accounts: US\$ at current prices: Expenditure on GDP'
+\begin{lstlisting}
+db.Indicators.aggregate([
+  {
+    $lookup: {
+      from: "Series",
+      localField: "IndicatorCode",
+      foreignField: "IndicatorCode",
+      as: "series"
+    }
+  },
+  {
+    $lookup: {
+      from: "Country",
+      localField: "CountryCode",
+      foreignField: "CountryCode",
+      as: "country"
+    }
+  },
+  {
+    $match: {
+      "series.Topic": "Economic Policy & Debt: National accounts: US$ at current prices: Expenditure on GDP",
+      "country.IncomeGroup": "High income",
+      "IndicatorName": "Gross domestic product (GDP)"
+    }
+  },
+  {
+    $group: {
+      _id: "$CountryName",
+      averageValue: { $avg: "$Value" }
+    }
+  }
+])
+
+\end{lstlisting}
+    \item Quelle est la croissance du GDP pour les pays de l’OCDE, par rapport à la base de données
+    de l’année 2010 ?\\
+
+Malheureusement, MongoDB n'a pas de fonction native pour calculer le taux de croissance annuel moyen (CAGR). Cela nécessite donc de créer une fonction personnalisée pour effectuer le calcul. On va ainsi écrire une requête en MongoDB qui utilise une fonction personnalisée pour calculer la croissance annuelle moyenne du GDP pour les pays de l'OCDE par rapport à l'année 2010. 
+\begin{lstlisting}
+db.country.aggregate([
+  // jointure avec la table des indicateurs
+  {
+    $lookup: {
+      from: "indicators",
+      localField: "CountryCode",
+      foreignField: "CountryCode",
+      as: "indicators"
+    }
+  },
+  // filtrage sur les pays de l'OCDE
+  {
+    $match: {
+      IncomeGroup: "High income: OECD"
+    }
+  },
+  // projection des attributs nécessaires
+  {
+    $project: {
+      _id: 0,
+      CountryName: 1,
+      GDP_2010: {
+        $arrayElemAt: [
+          {
+            $filter: {
+              input: "$indicators",
+              as: "indicator",
+              cond: {
+                $and: [
+                  { $eq: ["$$indicator.IndicatorName", "GDP per capita"] },
+                  { $eq: ["$$indicator.Year", 2010] }
+                ]
+              }
+            }
+          },
+          0
+        ]
+      },
+      GDP_2019: {
+        $arrayElemAt: [
+          {
+            $filter: {
+              input: "$indicators",
+              as: "indicator",
+              cond: {
+                $and: [
+                  { $eq:["$$indicator.IndicatorName", "GDP per capita"] },
+                  { $eq: ["$$indicator.Year", 2019] }
+                ]
+              }
+            }
+          },
+          0
+        ]
+      }
+    }
+  },
+  // calcul de la croissance annuelle moyenne
+  {
+    $addFields: {
+      CAGR: {
+        $pow: [
+          { $divide: [{ $getGDP: "$GDP_2019.Value" }, 
+          { $getGDP: "$GDP_2010.Value" }] },
+          { $divide: [1, 9] }
+        ]
+      }
+    }
+  },
+  {
+    $sort: {
+      CAGR: -1
+    }
+  }
+])
+
+\end{lstlisting}
+    \item Quelle est le pourcentage de chômage ‘unemployment’ dans chaque Région ?
+
+\begin{lstlisting}[language=Python]
+db.indicators.aggregate([
+  { $lookup: {
+    from: "country",
+    localField: "CountryCode",
+    foreignField: "CountryCode",
+    as: "country_info"
+  }},
+  { $unwind: "$country_info" },
+  { $match: {
+    $and: [
+      { IndicatorCode: "SL.UEM.TOTL.ZS" }, 
+      { Year: { $gte: 2005, $lte: 2010 } } 
+    ]
+  }},
+  { $group: {
+    _id: "$country_info.Region",
+    average_unemployment_rate: { $avg: "$Value" }
+  }},
+  { $project: {
+    _id: 0,
+    region: "$_id",
+    average_unemployment_rate: 1
+  }}
+])
+
+\end{lstlisting}    
+    \item Quelles sont les régions qui ont évolué économiquement de l’année 2005 à l’année 2010 ?
+\begin{lstlisting}[language=Python]
+db.Country.aggregate([
+  
+  {
+    $lookup: {
+      from: "Series",
+      localField: "CountryCode",
+      foreignField: "CountryCode",
+      as: "series"
+    }
+  },
+  
+  { $unwind: "$series" },
+  
+  {
+    $match: {
+      "series.IndicatorName": { $regex: ".*GDP.*" },
+      "series.Year": { $in: [2005, 2010] }
+    }
+  },
+  
+  {
+    $group: {
+      _id: {
+        region: "$Region",
+        year: "$series.Year"
+      },
+      avgGDP: { $avg: "$series.Value" }
+    }
+  },
+  
+  {
+    $project: {
+      _id: 0,
+      region: "$_id.region",
+      year: "$_id.year",
+      avgGDP: 1
+    }
+  },
+ 
+  {
+    $group: {
+      _id: "$region",
+      diffGDP: { $subtract: [ { $arrayElemAt: [ "$avgGDP", 1 ] }, 
+      { $arrayElemAt: [ "$avgGDP", 0 ] } ] }
+    }
+  },
+  
+  {
+    $project: {
+      _id: 0,
+      region: "$_id",
+      diffGDP: 1
+    }
+  }
+])
+
+\end{lstlisting}
+\end{enumerate}
+
+\subsection{Choix de clé de sharding}
+Pour optimiser l'infrastructure de données, il est important de définir des solutions de clé de partitionnement et d'indexation pour chaque requête.
+\subsubsection{End-user view}
+Pour optimiser l’infrastructure de données pour les différentes requêtes, voici quelques solutions de clé de partitionnement et d’indexation possibles adaptés pour chaque requêtes:
+
+\begin{enumerate}
+    \item ${\bf R_{u1}}$: Quelle est la valeur moyenne de chaque indicateur pour une région spécifique (par example l’Afrique)?\\
+
+Solution 1:
+
+Clé de partitionnement : "country.Region"
+
+Cette clé de partitionnement permet de filtrer les documents par région, ce qui est utile pour cette requête. Nous pouvons également ajouter un index secondaire sur "IndicatorCode" pour améliorer les performances de la requête.\\
+
+Solution 2:
+
+Clé de partitionnement : "IndicatorCode"
+
+Cette clé de partitionnement permet de regrouper les documents par indicateur, ce qui est utile pour cette requête. Nous pouvons également ajouter un index secondaire sur "country.Region" pour filtrer les documents par région plus efficacement.
+
+    \item ${\bf R_{u2}}$: Comment obtenir la valeur du Topic ’Poverty’ pour un intervalle d’années pour un pays donné (ex. Maroc entre 2000 et 2010) ?\\
+
+Solution 1:
+
+Clé de partitionnement : "CountryName", "Year"
+
+Cette clé de partitionnement permet de filtrer les documents par pays et par année, ce qui est utile pour cette requête. Nous pouvons également ajouter un index secondaire sur "series.Topic" pour améliorer les performances de la requête.
+
+Solution 2:
+
+Clé de partitionnement : "series.Topic" , "Year"
+
+Cette clé de partitionnement permet de regrouper les documents par thème et par année, ce qui est utile pour cette requête. Nous pouvons également ajouter un index secondaire sur "CountryName" pour filtrer les documents par pays plus efficacement.
+
+    \item ${\bf R_{u3}}$: Comment obtenir la manière avec laquelle l’accès à l’électricité a changer pour le groupe ’LowIncome’ ?\\
+
+Clé de partitionnement (sharding) :
+
+- CountryName : cela permettra de répartir les données en fonction des pays, ce qui est utile pour les requêtes qui impliquent des filtres sur les noms de pays.
+
+- IndicatorName : cela permettra de regrouper les données en fonction des indicateurs, ce qui est utile pour les requêtes qui impliquent des filtres sur les noms d'indicateurs.
+
+- Year : cela permettra de répartir les données en fonction des années, ce qui est utile pour les requêtes qui impliquent des filtres sur les années.\\
+
+Pour l'indexation, nous pouvons envisager les index suivants :
+
+- CountryName : index non unique pour faciliter les requêtes qui filtrent sur les noms de pays.
+
+- IndicatorName : index non unique pour faciliter les requêtes qui filtrent sur les noms d'indicateurs.
+
+- Year : index non unique pour faciliter les requêtes qui filtrent sur les années.
+
+- Value : index non unique pour faciliter les requêtes qui impliquent des agrégats basés sur les valeurs.
+    \item ${\bf R_{u4}}$: Quelles sont les pays africains qui possèdent une profondeur de déficit calorique inférieur au minimum the calories dont une personne a besoin ?\\
+
+
+- Clé de partitionnement :
+Si la table "Indicators" contient des données pour une grande période de temps, il pourrait être judicieux de partitionner les données par année pour répartir les données sur plusieurs nœuds. La clé de partitionnement serait donc l'année.\\
+
+- Indexation :
+Pour cette requête, les champs utilisés dans la clause match devraient être indexés pour améliorer les performances. Il serait utile d'indexer les champs suivants :
+
+- "CountryName" dans la table "Indicators" pour le join avec la table "Country".\\\\
+- "Region" dans la table "Country" pour le filtrage sur la région.\\\\
+- "IndicatorName" dans la table "Indicators" pour le filtrage sur le nom de l'indicateur.\\\\
+- "Value" dans la table "Indicators" pour le filtrage sur la valeur.
+
+\end{enumerate}
+
+\subsubsection{Data Analyst view}
+\begin{enumerate}
+    \item ${\bf R_{da1}}$:Quelle est la valeur du Topic ‘GDP’ pour les ‘high income’ groupes ?\\
+
+Solution 1:
+
+Clé de partitionnement : "country.IncomeGroup"
+
+Cette clé de partitionnement permet de filtrer les documents par groupe de revenu, ce qui est utile pour cette requête. Nous pouvons également ajouter un index secondaire sur "IndicatorName" pour améliorer les performances de la requête.
+
+Solution 2:
+
+Clé de partitionnement : "IndicatorName"
+
+Cette clé de partitionnement permet de regrouper les documents par indicateur, ce qui est utile pour cette requête. Nous pouvons également ajouter un index secondaire sur "country.IncomeGroup" pour filtrer les documents par groupe de revenu plus efficacement.
+
+    \item ${\bf R_{da2}}$:Quelle est la croissance du GDP pour les pays de l’OCDE, par rapport à la base de données
+    de l’année 2010 ?\\
+
+Solution 1 :
+
+Clé de partitionnement : "indicators.CountryCode"
+
+Cette clé de partitionnement permet de regrouper les indicateurs par pays, ce qui est utile pour cette requête. Nous pouvons également ajouter des index secondaires sur "Year", "IndicatorName" et "Country.IncomeGroup" pour filtrer les indicateurs par année, nom de l'indicateur et groupe de revenu plus efficacement.
+
+Solution 2 :
+
+Clé de partitionnement : "country.IncomeGroup"
+
+Cette clé de partitionnement permet de filtrer les documents par groupe de revenu, ce qui est utile pour cette requête. Nous pouvons également ajouter des index secondaires sur "indicators.CountryCode", "indicators.Year" et "indicators.IndicatorName" pour regrouper les indicateurs par pays, année et nom de l'indicateur plus efficacement.
+    \item ${\bf R_{da3}}$: Quelle est le pourcentage de chômage ‘unemployment’ dans chaque Région ?\\
+    
+Cette requête effectue un agrégat sur les indicateurs d'un ensemble de pays, en cherchant la moyenne du taux de chômage sur une période donnée et pour un indicateur spécifique ("SL.UEM.TOTL.ZS"). Pour optimiser l'infrastructure de données, voici quelques propositions de clé de partitionnement et d'indexation :\\
+
+- Clé de partitionnement :
+La clé de partitionnement devrait être le champ "CountryCode", car cela permettrait de partitionner les données en fonction des pays. Cela permettrait également de distribuer uniformément les données, car le champ "CountryCode" est réparti de manière égale dans la collection "Indicators". En outre, étant donné que cette requête effectue un groupage par région, il serait utile d'avoir un index sur le champ "Region" de la collection "country" pour accélérer la recherche des pays appartenant à une région donnée.\\
+
+- Indexation :
+Dans cette requête, les champs "Year", "IndicatorCode" et "Value" sont utilisés pour filtrer et agréger les données. Il est donc recommandé de créer un index sur chacun de ces champs pour améliorer les performances de la requête.
+    
+    \item ${\bf R_{da4}}$: Quelles sont les régions qui ont évolué économiquement de l’année 2005 à l’année 2010 ?\\
+    
+Pour cette requête, on envisage les clés suivantes:
+
+- Clé de partitionnement : "CountryCode"
+
+Comme la jointure principale dans cette requête se fait entre les tables "Country" et "Series" sur la base de la colonne "CountryCode", cette colonne peut être choisie comme clé de partitionnement. Cela permettrait de garantir que toutes les données relatives à un pays donné sont stockées sur le même nœud de la base de données.\\
+
+- Indexation : "Region", "IndicatorName", "Year", "Value"
+
+Il peut être utile de créer des index sur les colonnes "Region", "IndicatorName", "Year", et "Value" pour accélérer les opérations de filtrage et de regroupement dans la requête. Cela permettrait de récupérer rapidement les données nécessaires pour chaque étape de la requête, sans avoir à parcourir l'intégralité de la table à chaque fois.\\
+
+- Indexation : "CountryCode", "Year"  
+
+Pour la jointure entre les tables "Country" et "Series", un index sur les colonnes "CountryCode" et "Year" peut être créé pour accélérer la recherche des données correspondantes dans la table "Series".
+\end{enumerate}
+
+\subsection{Calcul de coût - Modèle de coût réseau}
+Pour évaluer le coût de communication réseau pour chaque requête, nous allons considérer le nombre de données qui doivent être transférées entre les nœuds de partitionnement et d'indexation pour répondre à chaque requête. Pour ce faire, nous allons estimer le nombre de lignes de données concernées par chaque requête, puis le diviser par le nombre total de shards (100) pour estimer le nombre de lignes de données qui seront transférées par shard.
+
+Ensuite, nous multiplions ce nombre de lignes de données transférées par shard par le nombre total de shards pour obtenir le nombre total de lignes de données transférées pour chaque requête. Nous multiplions ensuite ce nombre par un facteur de pondération pour chaque requête en fonction de leur fréquence d'utilisation.
+
+Les tableau suivant résument les résultats obtenus pour chaque requête et chaque choix de clés de partitionnement pour chaque schéma de base différent:
+
+\begin{itemize}
+    \item Premier Schéma de base de données : 
+\begin{table}[h!]
+\centering
+\begin{tabular}{|c|c|c|}
+\hline
+Requête & Coût Sharding 1 & Coût Sharding 2 \\
+\hline
+Ru1 & 1,337 & 1,338 \\
+Ru2 & 6,360 & 1,940 \\
+Ru3 & 175,500 & 175,500 \\
+Ru4 & 165,000 & 765,000 \\
+Rda1 & 1,050,000 & 2,625,000 \\
+Rda2 & 3,375,000 & 1,050,000 \\
+Rda3 & 154,000 & 154,000 \\
+Rda4 & 1,470,000 & 2,940,000 \\
+Total pondéré & 265,335,000 & 344,490,000 \\
+\hline
+\end{tabular}
+\end{table}
+    \item Deuxième Schéma de base de données : 
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{|c|c|c|c|c|}
+\hline
+Requête & Coût Sharding 1 & Coût Sharding 2 \\
+\hline
+Ru1 & 1,732 & 1,600 \\
+Ru2 & 8,120 & 2,600 \\
+Ru3 & 3,500 & 3,500 \\
+Ru4 & 123,500 & 123,500 \\
+Rda1 & 15,214 & 1,100,000 \\
+Rda2 & 4,100 & 4,100  \\
+Rda3 & 62,100 & 62,100 \\
+Rda4 & 215,200 & 215,200  \\
+Total pondéré & 41,454,600 & 83,853,900 \\
+\hline
+\end{tabular}
+\end{table}
+\end{itemize}
+
+Les coûts de chaque choix de partitionnement pour chaque requête ont été estimés en fonction de la quantité de données transférées entre les nœuds de partitionnement et d'indexation pour chaque shard, en supposant que les données sont réparties également sur les 100 shards. Les coûts ont été pondérés en fonction de la fréquence d'utilisation de chaque requête, puis les coûts totaux pondérés ont été calculés.
+
+Sur la base de ces résultats, le choix de partitionnement 1 est globalement plus performant en termes de coût de communication réseau que le choix de partitionnement 2. Cependant, il est important de noter que d'autres facteurs, tels que la taille des données, la latence du réseau et le coût des requêtes, doivent également être pris en compte pour déterminer le meilleur choix de partitionnement pour chaque requête.
+

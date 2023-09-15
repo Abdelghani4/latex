@@ -1,0 +1,232 @@
+\subsection{Nouvelles requêtes}
+\subsubsection{Première Approche}
+Pour ce nouveau schéma de base de données, les réponses aux requêtes seront maintenant plus facile et moins coûteuses en compétence de calculs. On détaillera ci-dessous les nouvelles requêtes pour les différents cas d'usages. 
+\begin{enumerate} 
+\item Quelle est la valeur de chaque indicateur pour une région spécifique (par example l’Afrique) ?
+
+Récupérer les données de la table "indicatorsAfrique" qui correspond à la région d'intérêt.
+\item Comment obtenir la valeur du Topic ’Poverty’ pour un intervalle d’années pour un pays donné ?
+
+Récupérer les données de la table "indicators" qui correspondent au pays et à l'intervalle d'années d'intérêt.
+Filtrer les données en sélectionnant uniquement les indicateurs correspondant au Topic "Poverty".
+\item Comment obtenir la manière avec laquelle l’accès à l’électricité a changer pour le groupe ’LowIncome’ ?
+
+Récupérer les données de la table "indicators" qui correspondent aux pays du groupe "LowIncome".
+Filtrer les données en sélectionnant uniquement les indicateurs correspondant au Topic "Electricity access".
+Calculer les différences ou les tendances entre les années pour voir comment l'accès à l'électricité a changé.
+\item Quelles sont les pays africains qui possèdent une profondeur de déficit calorique inférieur au minimum the calories dont une personne a besoin ?
+
+Récupérer les données de la table "indicatorsAfrique" qui correspondent à la région d'intérêt.
+Filtrer les données en sélectionnant uniquement les indicateurs correspondant au Topic "Caloric deficiency".
+Sélectionner les pays où la valeur de l'indicateur est inférieure à la valeur minimale nécessaire.
+\item Quelle est la valeur du Topic ‘GDP’ pour les ‘high income’ groupes ?
+
+Récupérer les données de la table "indicators" qui correspondent aux pays du groupe "HighIncome".
+Filtrer les données en sélectionnant uniquement les indicateurs correspondant au Topic "GDP".
+Calculer une valeur agrégée, comme la moyenne, pour les données filtrées.
+\item Quelle est la croissance du GDP pour les pays de l’OCDE, par rapport à la base de données de l’année 2010 ?\\
+Étape 1 : Sélectionner uniquement les enregistrements des pays appartenant à l'OCDE.\\
+Étape 2 : Sélectionner les enregistrements correspondant à l'année 2010 pour le "topic" GDP.\\
+Étape 3 : Pour chaque pays, calculer la différence entre la valeur de GDP de l'année 2010 et la valeur de base (par exemple, la moyenne de la série historique de GDP).\\
+Étape 4 : Tri des pays par ordre croissant ou décroissant de croissance du GDP.\\
+\item Quelle est le pourcentage de chômage ‘unemployment’ dans chaque Région ?\\
+Étape 1 : Sélectionner les enregistrements pour le "topic" unemployment.\\
+Étape 2 : Pour chaque région, calculer la moyenne des valeurs de chômage pour tous les pays de la région.\\
+Étape 3 : Tri des régions par ordre croissant ou décroissant de pourcentage de chômage.\\
+\item Quelles sont les régions qui ont évolué économiquement de l’année 2005 à l’année 2010 ?\\
+Étape 1 : Sélectionner les enregistrements pour l'année 2005 et l'année 2010 pour le "topic" GDP.\\
+Étape 2 : Pour chaque pays, calculer la différence entre la valeur de GDP de l'année 2010 et la valeur de l'année 2005.\\
+Étape 3 : Pour chaque région, calculer la moyenne de la croissance économique pour tous les pays de la région.\\
+Étape 4 : Tri des régions par ordre croissant ou décroissant de croissance économique.\\
+\end{enumerate}
+
+\subsubsection{Deuxième Approche}
+Pour ce nouveau schéma de base de données, les réponses aux requêtes seront maintenant plus facile et moins coûteuses en compétence de calculs. On détaillera ci-dessous les nouvelles requêtes pour les différents cas d'usages. 
+
+\begin{enumerate} 
+    \item Quelle est la valeur de chaque indicateur pour une région spécifique (ex. l’Afrique) ?\\
+Utiliser la table "indicators" surchargée avec les attributs "région" et "incomeGroup" pour accéder aux données nécessaires.
+Filtrer les données pour la région souhaitée (par exemple l'Afrique).
+\item Comment obtenir la valeur du Topic ’Poverty’ pour un intervalle d’années pour un pays donné ?\\
+Utiliser la table "indicators" surchargée avec les attributs "région" et "incomeGroup".
+Filtrer les données pour le pays souhaité et l'intervalle d'années souhaité.
+Utiliser la valeur matérialisée pour le Topic "Poverty".
+\item Comment obtenir la manière avec laquelle l’accès à l’électricité a changé pour le groupe ’LowIncome’ ?\\
+Utiliser la table "indicatorsLow" pour accéder aux données pour le groupe "LowIncome".
+Analysez les données pour l'indicateur "Accès à l'électricité" pour observer les changements.
+\item Quelles sont les pays africains qui possèdent une profondeur de déficit calorique inférieur au minimum the calories dont une personne a besoin ?\\
+Utiliser la table "indicators" surchargée avec les attributs "région" et "incomeGroup".
+Filtrer les données pour la région Afrique.
+Sélectionnez les pays avec un niveau de déficit calorique inférieur au minimum nécessaire.
+\item Quelle est la valeur du Topic ‘GDP’ pour les ‘high income’ groupes ?\\
+Il suffit de faire une requête SQL sur la table "indicatorsHigh" en sélectionnant le Topic "GDP".
+\item Quelle est la croissance du GDP pour les pays de l’OCDE, par rapport à la base de données de l’année 2010 ?\\
+Il faut d'abord filtrer les pays de l'OCDE en utilisant la table "country" pour sélectionner les pays correspondants.
+Ensuite, une requête SQL peut être effectuée sur la table "indicators" pour sélectionner les Topics "GDP" pour ces pays.
+Il peut être nécessaire de faire une agrégation sur les valeurs pour obtenir la croissance du GDP en comparaison avec la base de données de l'année 2010.
+\item Quelle est le pourcentage de chômage ‘unemployment’ dans chaque Région ?\\
+Il faut d'abord sélectionner les valeurs du Topic "unemployment" à partir de la table "indicators".
+Ensuite, une requête SQL peut être effectuée sur la table "indicators" en utilisant l'attribut "région" pour grouper les valeurs par région.
+Il peut être nécessaire de faire une agrégation pour obtenir le pourcentage de chômage pour chaque région.
+\item Quelles sont les régions qui ont évolué économiquement de l’année 2005 à l’année 2010 ?\\
+Il faut d'abord sélectionner les valeurs du Topic "GDP" à partir de la table "indicators" pour les années 2005 et 2010.
+Ensuite, une requête SQL peut être effectuée sur la table "indicators" en utilisant l'attribut "région" pour grouper les valeurs par région.
+Il peut être nécessaire de faire une agrégation pour obtenir la croissance du GDP pour chaque région.
+Finalement, en comparant les valeurs pour 2005 et 2010, les régions qui ont évolué économiquement peuvent être identifiées.
+\end{enumerate}
+
+
+\subsection{Nouvelles Statistiques}
+\subsubsection{Première approche}
+
+\begin{enumerate}
+    \item IndicatorsAfrica.csv
+\vspace{2mm}
+
+\textbf{Nombre de documents}: 1,3 millions \\
+\textbf{Cardinalité des attributs}
+
+     - 1337 Indicateurs différents 
+     
+     - 56 années (Year)
+     
+     - 48 pays (CountryName)
+
+     \item IndicatorsRDM.csv
+\vspace{2mm}
+
+\textbf{Nombre de documents}: 4,3 millions \\
+\textbf{Cardinalité des attributs}
+
+     - 1344 Indicateurs différents 
+     
+     - 56 années (Year)
+     
+     - 199 pays (CountryName)
+
+
+\vspace{2mm}
+
+    \item Country.csv
+\vspace{2mm}
+
+\textbf{Nombre de documents}: 247 \\
+\textbf{Cardinalité des attributs}
+
+     - 5 IncomeGroup
+     
+     - 7 Region
+     
+     - 247 pays (CountryName)
+
+\vspace{2mm}
+    \item SeriesNotes.csv
+\vspace{2mm}
+
+\textbf{Nombre de documents}: 369 \\
+\textbf{Cardinalité des attributs}
+
+     - 25 Seriescodes différentes
+     
+     - 55 year
+
+
+\vspace{2mm}
+    \item SeriesCountryNotes.csv
+\vspace{2mm}
+
+\textbf{Nombre de documents}: 4857 \\
+\textbf{Cardinalité des attributs}
+
+     - 259 IndicatorName
+
+     - 5 AggregationMethod
+
+     - 215 Country Code
+
+     - 37 Topic
+
+\end{enumerate}
+
+
+
+ \subsubsection{Deuxième approche}
+
+\begin{enumerate}
+    \item IndicatorsHigh.csv
+\vspace{2mm}
+
+\textbf{Nombre de documents}: 1,3 millions \\
+\textbf{Cardinalité des attributs}
+
+     - 1106 Indicateurs différents 
+     
+     - 56 années (Year)
+     
+     - 79 pays (CountryName)
+
+     \item IndicatorsLow.csv
+\vspace{2mm}
+
+\textbf{Nombre de documents}: 820000 \\
+\textbf{Cardinalité des attributs}
+
+     - 1337 Indicateurs différents 
+     
+     - 56 années (Year)
+     
+     - 31 pays (CountryName)
+
+     \item IndicatorsOthers.csv
+\vspace{2mm}
+
+\textbf{Nombre de documents}: 3,5 millions \\
+\textbf{Cardinalité des attributs}
+
+     - 1344 Indicateurs différents 
+     
+     - 56 années (Year)
+     
+     - 137 pays (CountryName)
+
+\vspace{2mm}
+    \item Country.csv
+\vspace{2mm}
+
+\textbf{Nombre de documents}: 247 \\
+\textbf{Cardinalité des attributs}
+
+     - 5 IncomeGroup
+     
+     - 7 Region
+     
+     - 247 pays (CountryName)
+
+\vspace{2mm}
+    \item SeriesNotes.csv
+\vspace{2mm}
+
+\textbf{Nombre de documents}: 369 \\
+\textbf{Cardinalité des attributs}
+
+     - 25 Seriescodes différentes
+     
+     - 55 year
+
+\vspace{2mm}
+    \item SeriesCountryNotes.csv
+\vspace{2mm}
+
+\textbf{Nombre de documents}: 4857 \\
+\textbf{Cardinalité des attributs}
+
+     - 259 IndicatorName
+
+     - 5 AggregationMethod
+
+     - 215 Country Code
+
+     - 37 Topic
+
+\end{enumerate}
+
